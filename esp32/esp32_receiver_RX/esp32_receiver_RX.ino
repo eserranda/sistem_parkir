@@ -10,7 +10,7 @@ const char *uri = "http://192.168.2.195:8000/api/print";
 const char *status = "http://192.168.2.195:8000/api/status";
 const char *update_status = "http://192.168.2.195:8000/api/update-status";
 
-String receivedMessage;
+String receivedMessage = ""; 
 
 unsigned long lastCheck = 0;
 const int timeInterval = 3000;
@@ -29,11 +29,13 @@ void loop() {
     lastCheck = millis();  // Catat waktu terakhir pembacaan data
   }
 
-  if (Serial2.available()) {
+  while (Serial2.available()) {
     char receivedChar = Serial2.read();
     receivedMessage += receivedChar;
 
     if (receivedChar == '\n') {
+      // Proses pesan setelah menerima newline
+      // receivedMessage.trim();  // Hilangkan karakter whitespace termasuk newline
       if (receivedMessage.equals("OPEN\n")) {
         Serial.println(receivedMessage);
         sendHttpRequest(uri);
@@ -42,7 +44,7 @@ void loop() {
         updateStatus(update_status);
       } else {
         Serial.print("Message : ");
-        Serial.println(receivedMessage);
+        Serial.println(receivedMessage); 
       }
       receivedMessage = "";  // Mengosongkan receivedMessage setelah pengolahan pesan
     }
@@ -60,7 +62,7 @@ void updateStatus(const char *update_status) {
     Serial.println("HTTP Code: " + String(httpCode));
     Serial.println("Response: " + response);
 
-DynamicJsonDocument doc(1024);
+    DynamicJsonDocument doc(1024);
     DeserializationError error = deserializeJson(doc, response);
     if (error) {
       Serial.print("deserializeJson() failed: ");
@@ -72,7 +74,7 @@ DynamicJsonDocument doc(1024);
     if (status == "tutup") {
       String pesan = "tutup\n";
       Serial2.print(pesan);
-    }  
+    }
 
   } else if (httpCode == 404) {
     Serial.println("Not Found!");

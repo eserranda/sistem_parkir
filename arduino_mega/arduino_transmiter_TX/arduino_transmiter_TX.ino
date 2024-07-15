@@ -2,17 +2,20 @@
 #include <LiquidCrystal_I2C.h>
 #include <Servo.h>
 
-int parkir[] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
 LiquidCrystal_I2C lcd(0x27, 20, 4);
+int sensorPins[] = { 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
+
+// Jumlah sensor
+const int numSensors = 10;
+
+// Variabel untuk menyimpan status sensor sebelumnya
+int previousSensorStatus[10];
 
 const int pmasuk = 33;
 const int pkeluar = 22;
 
-int jumlahSlotKosong = 0;
-int slotParkir = 0;
-
 // Tombol Tiket Masuk
-const int buttonPin = 26;            // contoh pin yang digunakan untuk tombol
+const int buttonPin = 26;            //  pin yang digunakan untuk tombol
 int buttonState = HIGH;              // Inisialisasi ke HIGH agar tidak terbaca input palsu saat awalnya
 unsigned long lastDebounceTime = 0;  // Waktu terakhir tombol ditekan
 unsigned long debounceDelay = 50;    // Waktu debouncing, dalam milidetik
@@ -33,6 +36,8 @@ int pintukeluarPrev = HIGH;  // Nilai awal adalah HIGH karena sensor tidak mende
 const unsigned long interval = 2000;  // interval waktu dalam milidetik (2 detik)
 unsigned long previousMillis = 0;     // menyimpan waktu terakhir pengecekan
 
+
+
 void setup() {
   Serial.begin(9600);
   Serial2.begin(9600);  //RX2 = 17, TX2 = 16
@@ -46,13 +51,21 @@ void setup() {
   servo1.write(0);
   servo2.write(0);
 
-  for (int i = 0; i < 9; i++) {
-    pinMode(parkir[i], INPUT_PULLUP);
+  // Inisialisasi pin sensor sebagai input
+  for (int i = 0; i < numSensors; i++) {
+    pinMode(sensorPins[i], INPUT_PULLUP);
+    previousSensorStatus[i] = HIGH;
   }
 
   pinMode(pmasuk, INPUT_PULLUP);
   pinMode(pkeluar, INPUT_PULLUP);
   pinMode(buttonPin, INPUT_PULLUP);
+
+  lcd.setCursor(2, 0);
+  lcd.print("-Selamat Datang-");
+
+  lcd.setCursor(2, 2);
+  lcd.print("Parkir Tersedia:");
 }
 
 
@@ -63,51 +76,48 @@ void loop() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
-    jumlahSlotKosong = 0;
+    int emptySlots = 0;
 
-    int statusParkir[10];
+    // Variabel untuk menyimpan slot parkir yang kosong
+    String emptySlotList = "";
 
-    for (int i = 0; i < 10; i++) {
-      statusParkir[i] = digitalRead(parkir[i]) == HIGH ? 1 : 0;
-      if (statusParkir[i] == 1) {
-        jumlahSlotKosong++;
+    // Variabel untuk mendeteksi apakah ada perubahan status
+    bool statusChanged = false;
+
+    // Baca nilai dari setiap sensor
+    for (int i = 0; i < numSensors; i++) {
+      // Baca nilai dari sensor
+      int sensorValue = digitalRead(sensorPins[i]);
+
+      // Cek apakah sensor tidak mendeteksi benda (active high)
+      if (sensorValue == HIGH) {
+        emptySlots++;
+        emptySlotList += String(i + 1) + " ";
       }
+
+      // Cek perubahan status sensor dari HIGH ke LOW atau LOW ke HIGH
+      if ((sensorValue == LOW && previousSensorStatus[i] == HIGH) || (sensorValue == HIGH && previousSensorStatus[i] == LOW)) {
+        statusChanged = true;
+      }
+
+      previousSensorStatus[i] = sensorValue;  // Perbarui status sensor sebelumnya
     }
 
-    // Serial.println("");
-    // Serial.print("Slot Kosong Real : ");
-    // Serial.println(jumlahSlotKosong);
-
-    // Serial.print("Status Hitung    : ");
-    // Serial.println(hitung);
-
-    if (hitung) {
-      slotParkir = jumlahSlotKosong - 1;
-      // Serial.print("slotParkir       : ");
-      // Serial.println(slotParkir);
-    } else {
-      slotParkir = jumlahSlotKosong;
-      // Serial.print("slotParkir       : ");
-      // Serial.println(slotParkir);
+    // Panggil sensorDetected jika ada perubahan status
+    if (statusChanged) {
+      sensorDetected(emptySlots, emptySlotList);
     }
 
-    lcd.setCursor(2, 0);
-    lcd.print("-Selamat Datang-");
+    // Tampilkan jumlah slot yang kosong dan nomor slot yang kosong
+    // Serial.print("Jumlah Slot Parkir Yang Kosong: ");
+    // Serial.println(emptySlots);
+    // Serial.print("Slot Parkir Yang Kosong: ");
+    // Serial.println(emptySlotList);
 
-    lcd.setCursor(2, 2);
-    lcd.print("Parkir Tersedia:");
-
-    if (jumlahSlotKosong == 0) {
-      lcd.setCursor(8, 3);
-      lcd.print("FULL");
-    } else {
-      lcd.setCursor(8, 3);
-      lcd.print("    ");
-      lcd.setCursor(9, 3);
-      lcd.print(slotParkir);
-    }
+    // Kirim data ke ESP32
+    String message = String(emptySlots) + "|" + emptySlotList;
+    Serial2.print(message + "\n");
   }
-
 
   unsigned long currentTime = millis();
   int reading = digitalRead(buttonPin);
@@ -129,6 +139,7 @@ void loop() {
         // Jika tombol sebelumnya ditekan, kirim pesan
         String pesan = "OPEN\n";
         Serial2.print(pesan);
+        Serial.println(pesan);
         buttonPressed = false;  // Reset status tombol yang ditekan
       }
     }
@@ -172,6 +183,42 @@ void loop() {
   }
   pintukeluarPrev = pintukeluar;  // Simpan nilai sensor pintukeluar untuk perbandingan berikutnya
 }
+
+void sensorDetected(int emptySlots, String emptySlotList) {
+  Serial.print("Jumlah Slot Kosong: ");
+  Serial.println(emptySlots);
+  Serial.print("Slot Parkir Yang Kosong: ");
+  Serial.println(emptySlotList);
+  Serial.println("");
+
+  if (emptySlots == 0) {
+    lcd.setCursor(8, 3);
+    lcd.print("FULL");
+
+    lcd.setCursor(0, 1);
+    lcd.print("  ");
+  } else {
+    lcd.clear();
+
+    lcd.setCursor(2, 0);
+    lcd.print("-Selamat Datang-");
+
+    lcd.setCursor(2, 2);
+    lcd.print("Parkir Tersedia:");
+
+    lcd.setCursor(0, 1);
+    lcd.print(emptySlotList);
+    lcd.setCursor(9, 3);
+    lcd.print(emptySlots);
+  }
+
+  if (emptySlots != 0) {
+    String message = String(emptySlots) + "|" + String(emptySlotList);
+    Serial.println(message);
+    Serial2.print(message);
+  }
+}
+
 
 void bukaPortalKeluar() {
   servo2.attach(25);
