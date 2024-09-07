@@ -2,13 +2,12 @@
 #include <WiFi.h>
 #include <ArduinoJson.h>
 
+const char *ssid = "covid_19";
+const char *password = "12345678910Babi";
 
-const char *ssid = "Yos";
-const char *password = "yoelmgs01";
-
-const char *uri = "http://192.168.2.195:8000/api/print";
-const char *status = "http://192.168.2.195:8000/api/status";
-const char *update_status = "http://192.168.2.195:8000/api/update-status";
+const char *uri = "http://192.168.43.178:8000/api/print";
+const char *status = "http://192.168.43.178:8000/api/status";
+const char *update_status = "http://192.168.43.178:8000/api/update-status";
 
 String receivedMessage = ""; 
 

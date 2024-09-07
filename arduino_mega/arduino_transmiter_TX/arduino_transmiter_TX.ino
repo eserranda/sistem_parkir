@@ -12,10 +12,12 @@ const int numSensors = 10;
 int previousSensorStatus[10];
 
 const int pmasuk = 33;
-const int pkeluar = 22;
+
+// tombil untuk mwembuka portal keluar
+const int pkeluar = 27;
 
 // Tombol Tiket Masuk
-const int buttonPin = 26;            //  pin yang digunakan untuk tombol
+const int buttonPin = 26;            //  pin yang digunakan untuk tombol tiket masuk
 int buttonState = HIGH;              // Inisialisasi ke HIGH agar tidak terbaca input palsu saat awalnya
 unsigned long lastDebounceTime = 0;  // Waktu terakhir tombol ditekan
 unsigned long debounceDelay = 50;    // Waktu debouncing, dalam milidetik
@@ -57,7 +59,7 @@ void setup() {
     previousSensorStatus[i] = HIGH;
   }
 
-  pinMode(pmasuk, INPUT_PULLUP);
+  // pinMode(pmasuk, INPUT_PULLUP);
   pinMode(pkeluar, INPUT_PULLUP);
   pinMode(buttonPin, INPUT_PULLUP);
 
@@ -73,6 +75,7 @@ void loop() {
   int pintumasuk = debounceRead(pmasuk);
   int pintukeluar = debounceRead(pkeluar);
 
+  int slotKosong;
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
@@ -105,18 +108,23 @@ void loop() {
 
     // Panggil sensorDetected jika ada perubahan status
     if (statusChanged) {
+      slotKosong = emptySlots;
       sensorDetected(emptySlots, emptySlotList);
     }
+  }
 
-    // Tampilkan jumlah slot yang kosong dan nomor slot yang kosong
-    // Serial.print("Jumlah Slot Parkir Yang Kosong: ");
-    // Serial.println(emptySlots);
-    // Serial.print("Slot Parkir Yang Kosong: ");
-    // Serial.println(emptySlotList);
-
-    // Kirim data ke ESP32
-    String message = String(emptySlots) + "|" + emptySlotList;
-    Serial2.print(message + "\n");
+  int readPkeluar = digitalRead(pkeluar);
+  if (readPkeluar == 0) {
+    Serial.println("Portal Tertutup");
+    bukaPortalKeluar();
+    while (true) {
+      int readPkeluarAgain = digitalRead(pkeluar);
+      if (readPkeluarAgain == 0) {
+        Serial.println("Tombol ditekan lagi, menutup portal");
+        tutupPortalKeluar();
+        break;
+      }
+    }
   }
 
   unsigned long currentTime = millis();
@@ -137,10 +145,15 @@ void loop() {
       // Tombol dilepas
       if (buttonPressed) {
         // Jika tombol sebelumnya ditekan, kirim pesan
-        String pesan = "OPEN\n";
-        Serial2.print(pesan);
-        Serial.println(pesan);
-        buttonPressed = false;  // Reset status tombol yang ditekan
+        if (slotKosong == 0) {
+          Serial.println("Full");
+          buttonPressed = false;  // Reset status tombol yang ditekan
+        } else {
+          String pesan = "OPEN\n";
+          Serial2.print(pesan);
+          Serial.println(pesan);
+          buttonPressed = false;  // Reset status tombol yang ditekan
+        }
       }
     }
   }
@@ -213,7 +226,8 @@ void sensorDetected(int emptySlots, String emptySlotList) {
   }
 
   if (emptySlots != 0) {
-    String message = String(emptySlots) + "|" + String(emptySlotList);
+    // String message = String(emptySlots) + "|" + String(emptySlotList);
+    String message = String(emptySlots) + "\n";
     Serial.println(message);
     Serial2.print(message);
   }
